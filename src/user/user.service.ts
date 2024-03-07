@@ -11,7 +11,15 @@ export class UserService {
   constructor(private prisma: PrismaService) {}
 
   async getAllUsers(): Promise<User[]> {
-    return this.prisma.user.findMany();
+    return this.prisma.user.findMany({ include: { ips: true } });
+  }
+
+  async getUserById(id: number): Promise<User> {
+    return this.prisma.user.findUnique({
+      where: {
+        id: id,
+      },
+    });
   }
 
   async createUser(data: User): Promise<User> {
