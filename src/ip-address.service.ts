@@ -18,4 +18,9 @@ export class IpAddressService {
       });
     }
   }
+  async createIpAddressMany(data: { ip: string; userId: number }[]) {
+    await this.prisma.ipAddress.createMany({
+      data: data,
+    });
+  }
 }

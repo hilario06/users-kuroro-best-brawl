@@ -13,6 +13,14 @@ import * as requestIp from 'request-ip';
 import { IpAddressService } from 'src/ip-address.service';
 import { UserService } from 'src/user/user.service';
 
+interface UserIps {
+  [key: string]: {
+    userId: number;
+    ip: string;
+  };
+}
+const IP_STORAGE_DURATION = 60000;
+
 @Injectable()
 export class IpAddressInterceptor implements NestInterceptor {
   constructor(
@@ -30,15 +38,37 @@ export class IpAddressInterceptor implements NestInterceptor {
         finalize(async () => {
           const user = await this.userService.getUserById(Number(userId));
           if (!user) return;
-          const cacheKey = `userExperience_${userId}`;
-          const cachedResult = await this.cacheManager.get(cacheKey);
-          if (!cachedResult) {
-            const clientIp = requestIp.getClientIp(request);
-            await this.ipAddressService.createIpAddress(
-              clientIp,
-              Number(userId),
+
+          let userIps: UserIps | undefined =
+            await this.cacheManager.get('user_ip_addresses');
+
+          if (!userIps || Object.keys(userIps).length === 0) {
+            await this.cacheManager.set(
+              'ip_storage_duration_3600000',
+              'user.ips',
+              IP_STORAGE_DURATION,
             );
-            await this.cacheManager.set(cacheKey, userId, 3600000);
+          }
+
+          userIps = userIps || {};
+          userIps[userId] = {
+            userId: Number(userId),
+            ip: requestIp.getClientIp(request),
+          };
+          await this.cacheManager.set('user_ip_addresses', userIps, 0);
+          const ip_storage_duration_3600000 = await this.cacheManager.get(
+            'ip_storage_duration_3600000',
+          );
+          if (!ip_storage_duration_3600000) {
+            await this.ipAddressService.createIpAddressMany(
+              Object.values(userIps),
+            );
+            await this.cacheManager.set('user_ip_addresses', {}, 0);
+            await this.cacheManager.set(
+              'ip_storage_duration_3600000',
+              'user.ips',
+              IP_STORAGE_DURATION,
+            );
           }
         }),
       );
